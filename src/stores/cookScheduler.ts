@@ -1,31 +1,24 @@
 import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 
-const stringToMonthYear = (periodString: string) => {
-  const monthString = periodString.slice(-2);
-  const yearString = periodString.slice(0, 4);
-  const month = parseInt(monthString);
-  const year = parseInt(yearString);
-  return { month: month, year: year };
-};
-
-const monthYearToString = (month: number, year: number) => {
-  let monthString = month.toString();
-  if (monthString.length < 2) {
-    monthString = "0" + monthString;
-  }
-  let yearString = year.toString();
-  while (yearString.length < 4) {
-    yearString = "0" + yearString;
-  }
-  return yearString + "-" + monthString;
-};
+import { monthYearToString, stringToMonthYear } from "@/utils";
 
 export const useSchedulerStore = defineStore("scheduler", () => {
   // periods represented in YYYY-MM format
+  // days represented in YYYY-MM-DD format
+
+  const today = new Date();
+  const todayYear = today.getFullYear();
+  const todayMonth = today.getMonth() + 1;
+  const todayPeriod = monthYearToString(todayMonth, todayYear);
+
   const periodSet: Set<string> = new Set();
   const periods = ref(periodSet);
-  const currentPeriod = ref("");
+  periods.value.add(todayPeriod);
+
+  const currentPeriod = ref(todayPeriod);
+  const currentYear = computed(() => stringToMonthYear(currentPeriod.value).year);
+  const currentMonth = computed(() => stringToMonthYear(currentPeriod.value).month); // 1-indexing of months
 
   const addPeriod = (period: string) => {
     periods.value.add(period);
@@ -70,6 +63,36 @@ export const useSchedulerStore = defineStore("scheduler", () => {
     }
   };
 
+  const cookingDaysMap: Map<string, Set<string>> = new Map(); // period -> set of days
+  const cookingDays = ref(cookingDaysMap);
+
+  const addCookingDay = (day: string) => {
+    console.log("adding cooking day");
+    const period = day.slice(0, 7);
+    if (periods.value.has(period)) {
+      const oldMap = new Map(cookingDays.value); // force reactivity
+      const daySet = new Set(oldMap.get(period) ?? []);
+      daySet.add(day);
+      oldMap.set(period, daySet);
+      cookingDays.value = oldMap;
+    } else {
+      throw new Error("Period has not been registered yet");
+    }
+  };
+
+  const removeCookingDay = (day: string) => {
+    const period = day.slice(0, 7);
+    if (periods.value.has(period)) {
+      const oldMap = new Map(cookingDays.value); // force reactivity
+      const daySet = new Set(oldMap.get(period) ?? []);
+      daySet.delete(day);
+      oldMap.set(period, daySet);
+      cookingDays.value = oldMap;
+    } else {
+      throw new Error("Period has not been registered yet");
+    }
+  };
+
   const preferencesMap: Map<
     string, // kerb
     Map<string, { canSolo: boolean; canLead: boolean; canAssist: boolean; maxCookingDays: number }>
@@ -86,5 +109,19 @@ export const useSchedulerStore = defineStore("scheduler", () => {
     maxCookingDays: number
   ) => {};
 
-  return { periods, currentPeriod, addPeriod, removePeriod, setCurrentPeriod, addCook, removeCook };
+  return {
+    cooks,
+    periods,
+    currentPeriod,
+    currentYear,
+    currentMonth,
+    cookingDays,
+    addCookingDay,
+    removeCookingDay,
+    addPeriod,
+    removePeriod,
+    setCurrentPeriod,
+    addCook,
+    removeCook,
+  };
 });

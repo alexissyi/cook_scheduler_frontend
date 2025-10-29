@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import { useSchedulerStore } from "@/stores/cookScheduler";
+import FoodStudControlCalendar from "./FoodStudControlCalendar.vue";
 </script>
 
 <template>
   <div>
-    <div>Add or remove cooking dates:</div>
+    <h3>Select cooking dates:</h3>
+    <FoodStudControlCalendar />
   </div>
 </template>
-
-<style scoped></style>

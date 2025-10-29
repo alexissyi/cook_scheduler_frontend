@@ -26,7 +26,7 @@ const formCostco = ()=>{
                 <label for="produce">Kerb</label>
                 <input id="produce" v-model.trim="produceKerb"></input>
             </div>
-            <input type="submit" value="Submit" />
+            <input type="submit" value="Set Produce FoodStud" />
         </fieldset>
     </form>
     <div>Costco FoodStud is: {{costcoFoodStudKerb }}</div>
@@ -37,7 +37,7 @@ const formCostco = ()=>{
                 <label for="costco">Kerb</label>
                 <input id="costco" v-model.trim="costcoKerb"></input>
             </div>
-            <input type="submit" value="Submit" />
+            <input type="submit" value="Set Costco FoodStud" />
         </fieldset>
     </form>
     </div>

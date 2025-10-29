@@ -4,6 +4,7 @@ import { useSchedulerStore } from "@/stores/cookScheduler";
 import PeriodControls from "@/components/PeriodControls.vue";
 import CookControls from "@/components/CookControls.vue";
 import DateControls from "@/components/DateControls.vue";
+import FormControls from "./FormControls.vue";
 </script>
 
 <template>
@@ -11,7 +12,7 @@ import DateControls from "@/components/DateControls.vue";
     <PeriodControls />
     <CookControls />
     <DateControls />
-    <div>Open form</div>
+    <FormControls />
   </div>
 </template>
 
