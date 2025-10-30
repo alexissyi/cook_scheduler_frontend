@@ -4,11 +4,12 @@ import { defineStore } from "pinia";
 export const useUserStore = defineStore("user", () => {
   const passwordMap: Map<string, string> = new Map();
   const adminKerb = "admin";
-  passwordMap.set(adminKerb, "adminPass");
+  const adminPassword = "adminPass";
   const passwords = ref(passwordMap);
   const currentKerb = ref("");
   const costcoFoodStudKerb = ref("");
   const produceFoodStudKerb = ref("");
+  const allUsers = computed(() => Array.from(passwords.value.keys()));
 
   const isLoggedIn = computed(() => currentKerb.value !== "");
 
@@ -51,12 +52,13 @@ export const useUserStore = defineStore("user", () => {
       throw new Error("Kerb is empty");
     } else {
       passwords.value.set(kerb, password);
-      currentKerb.value = kerb;
     }
   };
 
   const login = (kerb: string, password: string) => {
-    if (passwords.value.get(kerb) === password) {
+    if (kerb === adminKerb && password === adminPassword) {
+      currentKerb.value = kerb;
+    } else if (passwords.value.get(kerb) === password) {
       currentKerb.value = kerb;
     } else {
       throw new Error("Wrong password");
@@ -77,10 +79,9 @@ export const useUserStore = defineStore("user", () => {
     }
   };
 
-  const removeUser = () => {
+  const removeUser = (kerb: string) => {
     if (currentKerb.value !== adminKerb) {
-      passwords.value.delete(currentKerb.value);
-      currentKerb.value = "";
+      passwords.value.delete(kerb);
     }
   };
 
@@ -93,6 +94,7 @@ export const useUserStore = defineStore("user", () => {
     isAdminOrFoodStud,
     produceFoodStudKerb,
     costcoFoodStudKerb,
+    allUsers,
     setCostco,
     setProduce,
     uploadUser,

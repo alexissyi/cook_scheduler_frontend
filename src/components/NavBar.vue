@@ -1,35 +1,42 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { RouterLink, RouterView, useRoute } from "vue-router";
+import { RouterLink, useRoute } from "vue-router";
 import { useUserStore } from "@/stores/userAuthentication";
-import { storeToRefs } from "pinia";
 
-const { logout, isAdminOrFoodStud } = useUserStore();
-
+const { logout, isAdminOrFoodStud, isAdmin, currentKerb } = useUserStore();
 const currentRoute = useRoute();
 const currentRouteName = computed(() => currentRoute.name);
 </script>
 
 <template>
-  <nav>
-    <div id="navbar-left">
-      <RouterLink :to="{ name: 'Home' }">
-        <h1>CookScheduler</h1>
+  <nav class="navbar">
+    <div class="navbar-left">
+      <RouterLink :to="{ name: 'Home' }" class="brand">
+        <h2>CookScheduler</h2>
       </RouterLink>
+      <div class="greeting">Hi, {{ currentKerb }}</div>
     </div>
-    <div id="navbar-right">
-      <ul id="navbar-links">
-        <li>
-          <RouterLink :to="{ name: 'Availability' }"> Availability </RouterLink>
-        </li>
-        <li>
-          <RouterLink :to="{ name: 'Preference' }"> Preference </RouterLink>
+
+    <div class="navbar-right">
+      <ul class="navbar-links">
+        <li v-if="!isAdmin">
+          <RouterLink
+            :to="{ name: 'Availability' }"
+            :class="{ active: currentRouteName === 'Availability' }"
+          >
+            Availability
+          </RouterLink>
         </li>
         <li v-if="isAdminOrFoodStud">
-          <RouterLink :to="{ name: 'Controls' }"> Controls </RouterLink>
+          <RouterLink
+            :to="{ name: 'Controls' }"
+            :class="{ active: currentRouteName === 'Controls' }"
+          >
+            Controls
+          </RouterLink>
         </li>
         <li>
-          <RouterLink :to="{ name: 'Home' }" @click="logout"> Logout </RouterLink>
+          <RouterLink :to="{ name: 'Home' }" @click="logout">Logout</RouterLink>
         </li>
       </ul>
     </div>
@@ -37,32 +44,75 @@ const currentRouteName = computed(() => currentRoute.name);
 </template>
 
 <style scoped>
-nav {
-  display: grid;
-  grid-template-columns: 5fr 5fr;
-  background-color: azure;
-  padding: 0 2em;
-}
-
-#navbar-right {
-  grid-column-start: 2;
+.navbar {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-#navbar-left {
-  grid-column-start: 1;
-}
-
-#navbar-links {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
+  background-color: #d7f2c6;
+  padding: 0.75em 2em;
+  gap: 1em;
 }
 
-ul {
-  list-style-type: none;
+.navbar-left {
+  display: flex;
+  align-items: center; /* vertically aligns brand and greeting */
+  gap: 1em; /* space between brand and greeting */
+}
+
+.brand h2 {
+  color: #39673a;
+  margin: 0;
+}
+
+.greeting {
+  font-size: 0.85rem; /* smaller text */
+  font-weight: bold;
+  color: #39673a;
+  white-space: nowrap;
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+}
+
+.navbar-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navbar-links li a {
+  text-decoration: none;
+  color: #39673a;
+  font-weight: 500;
+  padding: 0.25em 0.5em;
+  transition: background-color 0.2s, color 0.2s;
+  border-radius: 4px;
+}
+
+.navbar-links li a:hover {
+  background-color: #c1e3b3;
+}
+
+.navbar-links li a.active {
+  background-color: #39673a;
+  color: white;
+}
+
+@media (max-width: 600px) {
+  .navbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .navbar-links {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 0.75em;
+  }
 }
 </style>

@@ -4,9 +4,17 @@ import { defineStore } from "pinia";
 import { monthYearToString, stringToMonthYear } from "@/utils";
 
 export const useSchedulerStore = defineStore("scheduler", () => {
+  const formsOpenMap: Map<string, boolean> = new Map(); // period -> boolean
+  const formsOpen = ref(formsOpenMap);
+
+  const toggleForm = (period: string) => {
+    if (formsOpen.value.has(period)) {
+      const oldValue = formsOpen.value.get(period);
+      formsOpen.value.set(period, !oldValue);
+    }
+  };
   // periods represented in YYYY-MM format
   // days represented in YYYY-MM-DD format
-
   const today = new Date();
   const todayYear = today.getFullYear();
   const todayMonth = today.getMonth() + 1;
@@ -14,7 +22,6 @@ export const useSchedulerStore = defineStore("scheduler", () => {
 
   const periodSet: Set<string> = new Set();
   const periods = ref(periodSet);
-  periods.value.add(todayPeriod);
 
   const currentPeriod = ref(todayPeriod);
   const currentYear = computed(() => stringToMonthYear(currentPeriod.value).year);
@@ -22,10 +29,14 @@ export const useSchedulerStore = defineStore("scheduler", () => {
 
   const addPeriod = (period: string) => {
     periods.value.add(period);
+    formsOpen.value.set(period, false);
   };
+
+  addPeriod(todayPeriod);
 
   const removePeriod = (period: string) => {
     periods.value.delete(period);
+    formsOpen.value.delete(period);
   };
 
   const setCurrentPeriod = (period: string) => {
@@ -93,21 +104,52 @@ export const useSchedulerStore = defineStore("scheduler", () => {
     }
   };
 
+  const availabilitiesMap: Map<string, Set<string>> = new Map(); // maps period -> set of days, corresponds to the logged in user
+  const availabilities = ref(availabilitiesMap);
+
+  const addAvailability = (day: string) => {
+    // day is string in YYYY-MM-DD format
+    const period = day.slice(0, 7);
+    if (periods.value.has(period)) {
+      const oldSet = availabilities.value.get(period);
+      const availabilitySet = oldSet ? oldSet : new Set<string>();
+      availabilitySet.add(day);
+      availabilities.value.set(period, availabilitySet);
+    }
+  };
+
+  const removeAvailability = (day: string) => {
+    // day is string in YYYY-MM-DD format
+    const period = day.slice(0, 7);
+    if (periods.value.has(period)) {
+      const oldSet = availabilities.value.get(period);
+      const availabilitySet = oldSet ? oldSet : new Set<string>();
+      availabilitySet.delete(day);
+      availabilities.value.set(period, availabilitySet);
+    }
+  };
+
   const preferencesMap: Map<
-    string, // kerb
-    Map<string, { canSolo: boolean; canLead: boolean; canAssist: boolean; maxCookingDays: number }>
-  > = new Map(); //kerb -> period  -> preference
+    string, // period
+    { canSolo: boolean; canLead: boolean; canAssist: boolean; maxCookingDays: number }
+  > = new Map(); //period  -> preference
 
   const preferences = ref(preferencesMap);
 
-  const uploadPreference = (
-    kerb: string,
+  const uploadPreferences = (
     period: string,
-    canSolo: boolean,
-    canLead: boolean,
-    canAssist: boolean,
-    maxCookingDays: number
-  ) => {};
+    canSolo?: boolean,
+    canLead?: boolean,
+    canAssist?: boolean,
+    maxCookingDays?: number
+  ) => {
+    preferences.value.set(period, {
+      canSolo: canSolo ? canSolo : false,
+      canLead: canLead ? canLead : false,
+      canAssist: canAssist ? canAssist : false,
+      maxCookingDays: maxCookingDays ? maxCookingDays : 0,
+    });
+  };
 
   return {
     cooks,
@@ -116,6 +158,10 @@ export const useSchedulerStore = defineStore("scheduler", () => {
     currentYear,
     currentMonth,
     cookingDays,
+    formsOpen,
+    availabilities,
+    preferences,
+    toggleForm,
     addCookingDay,
     removeCookingDay,
     addPeriod,
@@ -123,5 +169,8 @@ export const useSchedulerStore = defineStore("scheduler", () => {
     setCurrentPeriod,
     addCook,
     removeCook,
+    addAvailability,
+    removeAvailability,
+    uploadPreferences,
   };
 });
