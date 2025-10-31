@@ -1,181 +1,217 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
-import { storeToRefs } from "pinia";
-import { useSchedulerStore } from "@/stores/cookScheduler";
+import { ref, computed, watch, onMounted } from "vue";
+import { useSchedulerStore } from "@/stores/cookingSchedule";
 import { useUserStore } from "@/stores/userAuthentication";
-import { months, dayNames, dateToString } from "@/utils";
+import { storeToRefs } from "pinia";
+import {
+  months,
+  dayNames,
+  dateToString,
+  stringToMonthYear,
+  stringToYear,
+  getPeriod,
+  stringToMonth,
+  monthYearToString,
+} from "@/utils";
 
-// Scheduler store
 const schedulerStore = useSchedulerStore();
-const {
-  currentMonth,
-  currentYear,
-  periods,
-  formsOpen,
-  cookingDays,
-  availabilities,
-  preferences,
-  cooks,
-} = storeToRefs(schedulerStore);
-const { addAvailability, removeAvailability, uploadPreferences } = schedulerStore;
-
-// User store
 const userStore = useUserStore();
-const currentKerb = computed(() => userStore.currentKerb);
+const { currentUser } = storeToRefs(userStore);
 
-// Selected month/year
-const selectedYear = ref(currentYear.value);
-const selectedMonth = ref(currentMonth.value); // 1-indexed
+// selected period and period-relevant states
+const today = new Date();
+const year = today.getFullYear();
+const month = today.getMonth();
+const todayString = dateToString(today);
+const selectedPeriod = ref(getPeriod(todayString)); // YYYY-MM string
 
-// Computed period string
-const selectedPeriod = computed(() => {
-  const month = String(selectedMonth.value).padStart(2, "0");
-  return `${selectedYear.value}-${month}`;
+const selectedYear = computed(() => stringToYear(selectedPeriod.value));
+const selectedMonth = computed(() => stringToMonth(selectedPeriod.value)); // 1-indexed
+
+const cookingDates = ref<Set<string>>(new Set()); // YYYY-MM-DD strings
+
+const isCurrent = ref(false);
+const isRegisteredPeriod = ref(false);
+const isOpen = ref(false);
+const isRegisteredCook = ref(false);
+
+const availability = ref<Set<string>>(new Set());
+const preferences = ref({
+  canSolo: false,
+  canLead: false,
+  canAssist: false,
+  maxCookingDays: 0,
 });
-
-// Availability for this period
-const availabilitySet = computed(() => {
-  return availabilities.value.get(selectedPeriod.value) ?? new Set<string>();
-});
-
-// Determine if period is open
-const formOpenForSelected = computed(() => formsOpen.value.get(selectedPeriod.value) ?? false);
-
-// Cooking days for this period
-const cookingDaysSet = computed(
-  () => cookingDays.value.get(selectedPeriod.value) ?? new Set<string>()
-);
-
-// Check if user is registered as cook for this period
-const isRegisteredCook = computed(() => {
-  const cookSet = cooks.value.get(selectedPeriod.value);
-  return cookSet?.has(currentKerb.value) ?? false;
-});
-
-// Determine if user can edit
-const canEdit = computed(() => formOpenForSelected.value && isRegisteredCook.value);
-
-// Calendar array
-const calendarDays = ref<(Date | null)[]>([]);
-
-// Generate years list
-const years: number[] = Array.from({ length: 10 }, (_, i) => currentYear.value - 5 + i);
-
-// Preferences reactive state
-const localCanSolo = ref(false);
-const localCanLead = ref(false);
-const localCanAssist = ref(false);
-const localMaxCookingDays = ref(0);
-
-// Sync preferences from store
-function loadPreferences() {
-  const pref = preferences.value.get(selectedPeriod.value);
-  if (pref) {
-    localCanSolo.value = pref.canSolo;
-    localCanLead.value = pref.canLead;
-    localCanAssist.value = pref.canAssist;
-    localMaxCookingDays.value = pref.maxCookingDays;
-  } else {
-    localCanSolo.value = false;
-    localCanLead.value = false;
-    localCanAssist.value = false;
-    localMaxCookingDays.value = 0;
-  }
-}
 
 const showSavedMessage = ref(false);
+const showFallbackMessage = ref(false);
 
-function savePreferences() {
-  if (!canEdit.value) {
-    alert(
-      "Cannot save preferences: either this period is closed or you are not registered as a cook."
-    );
-    return;
-  }
-  uploadPreferences(
-    selectedPeriod.value,
-    localCanSolo.value,
-    localCanLead.value,
-    localCanAssist.value,
-    localMaxCookingDays.value
-  );
+// determines whether a user can actually enter anything
+const canEdit = computed(() => isRegisteredPeriod.value && isOpen.value && isRegisteredCook.value);
 
-  // Show temporary "Saved" message
-  showSavedMessage.value = true;
-  setTimeout(() => {
-    showSavedMessage.value = false;
-  }, 5000); // disappears after 5 seconds
-}
-
-// Generate calendar
+// calendar generation
+const calendarDays = ref<(Date | null)[]>([]);
 function generateCalendar(): void {
+  if (!selectedYear.value || !selectedMonth.value) return;
   const firstDay = new Date(selectedYear.value, selectedMonth.value - 1, 1);
   const lastDay = new Date(selectedYear.value, selectedMonth.value, 0);
-
-  const daysInMonth = lastDay.getDate();
-  const startWeekday = firstDay.getDay();
-
   const daysArray: (Date | null)[] = [];
-
-  for (let i = 0; i < startWeekday; i++) daysArray.push(null);
-  for (let day = 1; day <= daysInMonth; day++) {
+  for (let i = 0; i < firstDay.getDay(); i++) daysArray.push(null);
+  for (let day = 1; day <= lastDay.getDate(); day++) {
     daysArray.push(new Date(selectedYear.value, selectedMonth.value - 1, day));
   }
   while (daysArray.length % 7 !== 0) daysArray.push(null);
-
   calendarDays.value = daysArray;
 }
 
-// Navigation
+async function loadPeriodData() {
+  if (!selectedPeriod.value) return;
+  const period = selectedPeriod.value;
+  const user = currentUser.value;
+
+  const [
+    isOpenData,
+    isCurrentPeriodData,
+    isRegisteredCookData,
+    isRegisteredPeriodData,
+    cookingDatesData,
+    availData,
+    prefData,
+  ] = await Promise.all([
+    schedulerStore._isOpen(period),
+    schedulerStore._isCurrentPeriod(period),
+    schedulerStore._isRegisteredCook(user, period),
+    schedulerStore._isRegisteredPeriod(period),
+    schedulerStore._getCookingDates(period),
+    schedulerStore._getAvailability(user, period),
+    schedulerStore._getPreference(user, period),
+  ]);
+
+  console.log(`isOpenData for ${period}: ${isOpenData[0]?.isOpen}`);
+  console.log(
+    `isRegisteredPeriodData for ${period}: ${isRegisteredPeriodData[0]?.isRegisteredPeriod}`
+  );
+  console.log(`isRegisteredCookData for ${period}: ${isRegisteredCookData[0]?.isRegisteredCook}`);
+  console.log(`availData for ${period}: ${availData?.map((d: any) => d.date)}`);
+  isOpen.value = isOpenData?.[0]?.isOpen ?? false;
+  isCurrent.value = isCurrentPeriodData?.[0]?.isCurrentPeriod ?? false;
+  isRegisteredCook.value = isRegisteredCookData?.[0]?.isRegisteredCook ?? false;
+  isRegisteredPeriod.value = isRegisteredPeriodData?.[0]?.isRegisteredPeriod ?? false;
+  cookingDates.value = new Set(cookingDatesData?.map((d: any) => d.cookingDate));
+  availability.value = new Set(availData?.map((d: any) => d.date));
+
+  if (prefData?.length) {
+    const p = prefData[0];
+    preferences.value = {
+      canSolo: p.canSolo,
+      canLead: p.canLead,
+      canAssist: p.canAssist,
+      maxCookingDays: p.maxCookingDays,
+    };
+  } else {
+    preferences.value = { canSolo: false, canLead: false, canAssist: false, maxCookingDays: 0 };
+  }
+}
+
+// interaction
+async function onDayClick(date: string) {
+  if (!canEdit.value) {
+    alert("Availability editing is closed or you are not a registered cook.");
+    return;
+  }
+  if (!cookingDates.value.has(date)) return;
+
+  const user = currentUser.value;
+  if (availability.value.has(date)) {
+    console.log(`Removing availability ${date}`);
+    await schedulerStore.removeAvailability(user, date);
+    availability.value.delete(date);
+  } else {
+    console.log(`Adding availability ${date}`);
+    await schedulerStore.addAvailability(user, date);
+    availability.value.add(date);
+  }
+}
+
+async function savePreferences() {
+  if (!canEdit.value) {
+    alert("Cannot save preferences: closed period or not a registered cook.");
+    return;
+  }
+  await schedulerStore.uploadPreference(
+    currentUser.value,
+    selectedPeriod.value,
+    preferences.value.canSolo,
+    preferences.value.canLead,
+    preferences.value.canAssist,
+    preferences.value.maxCookingDays
+  );
+  showSavedMessage.value = true;
+  setTimeout(() => (showSavedMessage.value = false), 4000);
+}
+
+// --- Navigation ---
 function prevMonth() {
   if (selectedMonth.value === 1) {
-    selectedMonth.value = 12;
-    selectedYear.value -= 1;
-  } else selectedMonth.value -= 1;
+    const prevMonth = 12;
+    const prevYear = selectedYear.value - 1;
+    const prevPeriod = monthYearToString(prevMonth, prevYear);
+    selectedPeriod.value = prevPeriod;
+  } else {
+    const prevMonth = selectedMonth.value - 1;
+    const prevPeriod = monthYearToString(prevMonth, selectedYear.value);
+    selectedPeriod.value = prevPeriod;
+  }
   generateCalendar();
+  loadPeriodData();
 }
 
 function nextMonth() {
   if (selectedMonth.value === 12) {
-    selectedMonth.value = 1;
-    selectedYear.value += 1;
-  } else selectedMonth.value += 1;
-  generateCalendar();
-}
-
-// Jump to current period
-function jumpToCurrentPeriod() {
-  selectedYear.value = currentYear.value;
-  selectedMonth.value = currentMonth.value;
-  generateCalendar();
-}
-
-// Toggle availability
-function onDayClick(day: string) {
-  if (!periods.value.has(selectedPeriod.value)) return;
-  if (!canEdit.value) {
-    alert("Availability editing is closed for this period or you are not registered as a cook.");
-    return;
+    const nextMonth = 1;
+    const nextYear = selectedYear.value + 1;
+    const nextPeriod = monthYearToString(nextMonth, nextYear);
+    selectedPeriod.value = nextPeriod;
+  } else {
+    const nextMonth = selectedMonth.value + 1;
+    const nextPeriod = monthYearToString(nextMonth, selectedYear.value);
+    selectedPeriod.value = nextPeriod;
   }
-  if (!cookingDaysSet.value.has(day)) return;
-
-  if (availabilitySet.value.has(day)) removeAvailability(day);
-  else addAvailability(day);
+  generateCalendar();
+  loadPeriodData();
+}
+// sets selected period to current period if it exists, otherwise does nothing
+async function jumpToCurrentPeriod() {
+  const currentPeriodData = await schedulerStore._getCurrentPeriod();
+  if (currentPeriodData) {
+    const currentPeriod = currentPeriodData[0].period;
+    selectedPeriod.value = currentPeriod;
+  }
+  generateCalendar();
+  await loadPeriodData();
 }
 
-// Initialize calendar
-generateCalendar();
+// 5 year range for year selector drop down
+const years = computed(() => {
+  const range: number[] = [];
+  for (let y = year - 2; y <= year + 2; y++) range.push(y);
+  return range;
+});
 
-// Watch for period changes to auto-load preferences
-watch([selectedMonth, selectedYear, preferences], () => {
+// --- Lifecycle ---
+onMounted(async () => {
   generateCalendar();
-  loadPreferences();
+  await loadPeriodData();
+});
+
+watch([selectedYear, selectedMonth], async () => {
+  generateCalendar();
+  await loadPeriodData();
 });
 </script>
 
 <template>
   <div class="calendar-wrapper">
-    <!-- Calendar -->
     <div class="availability-calendar">
       <div class="calendar-header">
         <button class="nav-btn" @click="prevMonth">◀</button>
@@ -198,14 +234,14 @@ watch([selectedMonth, selectedYear, preferences], () => {
           class="calendar-cell"
           :class="{
             empty: !date,
-            available: date && availabilitySet?.has(dateToString(date)) && canEdit,
+            available: date && availability.has(dateToString(date)) && canEdit,
             notEditable: date && !canEdit,
-            nonCookingDay: date && !cookingDaysSet.has(dateToString(date)),
+            nonCookingDay: date && !cookingDates.has(dateToString(date)),
           }"
           @click="
             date &&
               canEdit &&
-              cookingDaysSet.has(dateToString(date)) &&
+              cookingDates.has(dateToString(date)) &&
               onDayClick(dateToString(date))
           "
         >
@@ -215,38 +251,50 @@ watch([selectedMonth, selectedYear, preferences], () => {
 
       <div class="jump-btn-container">
         <button class="jump-btn" @click="jumpToCurrentPeriod">Jump to Current Period</button>
+        <div v-if="showFallbackMessage" class="fallback-message">
+          No current period set — showing this month instead.
+        </div>
       </div>
 
       <div v-if="!canEdit" class="closed-message">
-        Availability editing is closed or you are not registered as a cook for this period.
+        Availability editing is closed or you are not registered as a cook.
       </div>
     </div>
 
-    <!-- Preferences Panel -->
     <div class="preferences-panel">
       <h3>Preferences for {{ months[selectedMonth - 1] }} {{ selectedYear }}</h3>
+
       <div class="pref-item">
-        <input type="checkbox" id="canSolo" v-model="localCanSolo" :disabled="!canEdit" />
+        <input type="checkbox" id="canSolo" v-model="preferences.canSolo" :disabled="!canEdit" />
         <label for="canSolo">Can solo cook</label>
       </div>
+
       <div class="pref-item">
-        <input type="checkbox" id="canLead" v-model="localCanLead" :disabled="!canEdit" />
+        <input type="checkbox" id="canLead" v-model="preferences.canLead" :disabled="!canEdit" />
         <label for="canLead">Can lead in pair</label>
       </div>
+
       <div class="pref-item">
-        <input type="checkbox" id="canAssist" v-model="localCanAssist" :disabled="!canEdit" />
+        <input
+          type="checkbox"
+          id="canAssist"
+          v-model="preferences.canAssist"
+          :disabled="!canEdit"
+        />
         <label for="canAssist">Can assist in pair</label>
       </div>
+
       <div class="pref-item">
         <label for="maxDays">Max cooking days:</label>
         <input
           type="number"
           id="maxDays"
-          v-model.number="localMaxCookingDays"
+          v-model.number="preferences.maxCookingDays"
           min="0"
           :disabled="!canEdit"
         />
       </div>
+
       <button class="save-btn" @click="savePreferences" :disabled="!canEdit">
         Save Preferences
       </button>
@@ -402,5 +450,13 @@ watch([selectedMonth, selectedYear, preferences], () => {
   color: #39673a;
   font-weight: bold;
   font-size: 0.95rem;
+}
+
+.fallback-message {
+  margin-top: 8px;
+  text-align: center;
+  color: #b15a00;
+  font-size: 0.9rem;
+  font-style: italic;
 }
 </style>

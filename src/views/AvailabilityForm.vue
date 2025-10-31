@@ -2,14 +2,14 @@
 import NavBar from "@/components/NavBar.vue";
 import AvailabilityCalendar from "@/components/AvailabilityCalendar.vue";
 import { storeToRefs } from "pinia";
-import { useSchedulerStore } from "@/stores/cookScheduler";
+import { useSchedulerStore } from "@/stores/cookingSchedule";
 import { useUserStore } from "@/stores/userAuthentication";
 
 const userStore = useUserStore();
 const { isAdmin } = storeToRefs(userStore);
 
 const schedulerStore = useSchedulerStore();
-const { currentPeriod, availabilities } = storeToRefs(schedulerStore);
+const { currentPeriod } = storeToRefs(schedulerStore);
 const { addAvailability, removeAvailability } = schedulerStore;
 </script>
 

@@ -51,3 +51,15 @@ export const dateToString = (date: Date) => {
 
   return year + "-" + month + "-" + day;
 };
+
+export const getPeriod = (dateString: string): string => {
+  return dateString.slice(0, 7);
+};
+
+export const stringToMonth = (dateString: string): number => {
+  return Number(dateString.slice(5, 7));
+};
+
+export const stringToYear = (dateString: string): number => {
+  return Number(dateString.slice(0, 4));
+};

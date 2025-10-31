@@ -1,150 +1,244 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, useCssVars } from "vue";
 import { storeToRefs } from "pinia";
-import { useSchedulerStore } from "@/stores/cookScheduler";
+import { useSchedulerStore } from "@/stores/cookingSchedule";
 import { useUserStore } from "@/stores/userAuthentication";
-import { months, dayNames, dateToString } from "@/utils";
+import {
+  months,
+  dayNames,
+  dateToString,
+  stringToYear,
+  stringToMonth,
+  getPeriod,
+  monthYearToString,
+} from "@/utils";
 
 const schedulerStore = useSchedulerStore();
 const userStore = useUserStore();
 
-// Extract scheduler actions
 const {
-  addCookingDay,
-  removeCookingDay,
+  addCookingDate,
+  removeCookingDate,
   addPeriod,
-  setCurrentPeriod,
   removePeriod,
+  setCurrentPeriod,
   addCook,
+  openPeriod,
+  closePeriod,
   removeCook,
-  toggleForm,
+  _getCookingDates,
+  _getCooks,
+  _getCurrentPeriod,
+  _isOpen,
+  _isRegisteredPeriod,
+  _isRegisteredCook,
+  _isCurrentPeriod,
 } = schedulerStore;
 
-// Scheduler state refs
-const { currentMonth, currentYear, cookingDays, periods, currentPeriod, cooks, formsOpen } =
-  storeToRefs(schedulerStore);
+const { currentPeriod, currentMonth, currentYear } = storeToRefs(schedulerStore);
 
-// Local state for user list (fetched from backend)
-const allUsers = ref<string[]>([]);
+// non-period-specific state
+const allUsers = ref<Array<{ user: string; kerb: string }>>([]); // users to select cooks from
+const cookToAddKerb = ref(""); // a kerb
+const showFallbackMessage = ref(false); // for when no current period is set
+const showBadDeregisterAttemptMsg = ref(false);
 
-// Load all registered users (backend returns [{ user: "id" }])
+const getKerb = (user: string) => {
+  const userObj = allUsers.value.find((u) => u.user === user);
+  return userObj ? userObj.kerb : undefined;
+};
+
+// get all registered users
 const fetchUsers = async () => {
   try {
     const res = await userStore._getUsers();
     if (Array.isArray(res)) {
-      allUsers.value = res.map((u) => u.user);
+      allUsers.value = res.map((u) => ({ user: u.user, kerb: u.kerb }));
     }
   } catch (err) {
     console.error("Failed to load users:", err);
   }
 };
 
-onMounted(fetchUsers);
+// selected period and relevant states
+const today = new Date();
+const year = today.getFullYear();
+const month = today.getMonth();
+const todayString = dateToString(today);
+const selectedPeriod = ref(getPeriod(todayString)); // YYYY-MM string
 
-// Calendar logic
-type CalendarDay = Date | null;
+const selectedYear = computed(() => stringToYear(selectedPeriod.value));
+const selectedMonth = computed(() => stringToMonth(selectedPeriod.value));
 
-const selectedYear = ref(currentYear.value);
-const selectedMonth = ref(currentMonth.value); // 1-indexed
-const selectedPeriod = computed(() => {
-  const month = String(selectedMonth.value).padStart(2, "0");
-  return `${selectedYear.value}-${month}`;
-});
+const cookingDates = ref<Set<string>>(new Set()); // YYYY-MM-DD strings
+const cooks = ref<Set<string>>(new Set()); // users
+const isCurrent = ref(false);
+const isRegistered = ref(false);
+const isOpen = ref(false);
 
-const daySet = computed(() => cookingDays.value.get(selectedPeriod.value) ?? new Set<string>());
-const isRegistered = computed(() => periods.value.has(selectedPeriod.value));
-const isCurrent = computed(() => currentPeriod.value === selectedPeriod.value);
+// load cooks, dates, and form status for selected period
+async function loadPeriodData() {
+  const period = selectedPeriod.value;
+  const [datesData, cooksData, isOpenData, isRegisteredData, isCurrentData] = await Promise.all([
+    _getCookingDates(period),
+    _getCooks(period),
+    _isOpen(period),
+    _isRegisteredPeriod(period),
+    _isCurrentPeriod(period),
+  ]);
+  console.log(`isOpenData for ${period}: ${isOpenData[0]?.isOpen}`);
+  console.log(`isRegisteredData for ${period}: ${isRegisteredData[0]?.isRegisteredPeriod}`);
+  console.log(`isCurrentData for ${period}: ${isCurrentData[0]?.isCurrentPeriod}`);
+  cookingDates.value = new Set(datesData?.map((d: any) => d.cookingDate));
+  cooks.value = new Set(cooksData?.map((d: any) => d.cook));
+  if (isOpenData) {
+    isOpen.value = isOpenData[0].isOpen;
+  }
+  if (isRegisteredData) {
+    isRegistered.value = isRegisteredData[0].isRegisteredPeriod;
+  }
+  if (isCurrentData) {
+    isCurrent.value = isCurrentData[0].isCurrentPeriod;
+  }
+  showBadDeregisterAttemptMsg.value = false;
+}
 
-const cooksForPeriod = computed(() => cooks.value.get(selectedPeriod.value) ?? new Set<string>());
-const cookToAdd = ref("");
+// toggle open/close
+async function toggleOpenPeriod() {
+  console.log(`Toggling forms for ${selectedPeriod.value}`);
+  if (isOpen.value) {
+    await closePeriod(selectedPeriod.value);
+  } else {
+    await openPeriod(selectedPeriod.value);
+  }
+  await loadPeriodData();
+}
 
-const formOpenForSelected = computed(() => formsOpen.value.get(selectedPeriod.value) ?? false);
-const calendarDays = ref<CalendarDay[]>([]);
+// toggle register/unregister
+async function toggleRegisterPeriod() {
+  console.log(`Toggling registration of ${selectedPeriod.value}`);
+  if (isRegistered.value) {
+    if (isCurrent.value) {
+      showBadDeregisterAttemptMsg.value = true;
+      return;
+    }
+    console.log("Removing period");
+    await removePeriod(selectedPeriod.value);
+  } else {
+    console.log("Adding period");
+    await addPeriod(selectedPeriod.value);
+  }
+  await loadPeriodData();
+}
 
-const years: number[] = Array.from({ length: 10 }, (_, i) => currentYear.value - 5 + i);
+// set selected period as current period
+async function setSelectedAsCurrentPeriod() {
+  console.log(`Setting ${selectedPeriod.value} as current period`);
+  await setCurrentPeriod(selectedPeriod.value);
+  await loadPeriodData();
+}
 
-function generateCalendar(): void {
-  const firstDay = new Date(selectedYear.value, selectedMonth.value - 1, 1);
-  const lastDay = new Date(selectedYear.value, selectedMonth.value, 0);
-  const daysArray: CalendarDay[] = [];
-
-  for (let i = 0; i < firstDay.getDay(); i++) daysArray.push(null);
-  for (let d = 1; d <= lastDay.getDate(); d++)
+// generate the calendar days array used to load calendar in html
+const calendarDays = ref<(Date | null)[]>([]);
+function generateCalendar() {
+  const first = new Date(selectedYear.value, selectedMonth.value - 1, 1);
+  const last = new Date(selectedYear.value, selectedMonth.value, 0);
+  const daysArray: (Date | null)[] = [];
+  for (let i = 0; i < first.getDay(); i++) daysArray.push(null);
+  for (let d = 1; d <= last.getDate(); d++)
     daysArray.push(new Date(selectedYear.value, selectedMonth.value - 1, d));
   while (daysArray.length % 7 !== 0) daysArray.push(null);
-
   calendarDays.value = daysArray;
+}
+
+// --- Actions ---
+async function onDayClick(date: string) {
+  if (cookingDates.value.has(date)) {
+    console.log(`Removing cooking date ${date}`);
+    await removeCookingDate(date);
+  } else {
+    console.log(`Adding cooking date ${date}`);
+    await addCookingDate(date);
+  }
+  await loadPeriodData();
+}
+
+async function formAddCook() {
+  const kerb = cookToAddKerb.value.trim();
+  if (!kerb) return;
+  const userObj = allUsers.value.find((u) => u.kerb === kerb);
+  if (!userObj) {
+    alert(`${kerb} is not a registered user.`);
+    return;
+  }
+  const user = userObj.user;
+  console.log("Registering cook: ", kerb);
+  await addCook(selectedPeriod.value, user);
+  cooks.value.add(user);
+  cookToAddKerb.value = "";
+  await loadPeriodData();
+}
+
+async function removeCookFromPeriod(user: string) {
+  await removeCook(selectedPeriod.value, user);
+  cooks.value.delete(user);
+  await loadPeriodData();
 }
 
 function prevMonth() {
   if (selectedMonth.value === 1) {
-    selectedMonth.value = 12;
-    selectedYear.value -= 1;
+    const prevMonth = 12;
+    const prevYear = selectedYear.value - 1;
+    const prevPeriod = monthYearToString(prevMonth, prevYear);
+    selectedPeriod.value = prevPeriod;
   } else {
-    selectedMonth.value -= 1;
+    const prevMonth = selectedMonth.value - 1;
+    const prevPeriod = monthYearToString(prevMonth, selectedYear.value);
+    selectedPeriod.value = prevPeriod;
   }
   generateCalendar();
+  loadPeriodData();
 }
 
 function nextMonth() {
   if (selectedMonth.value === 12) {
-    selectedMonth.value = 1;
-    selectedYear.value += 1;
+    const nextMonth = 1;
+    const nextYear = selectedYear.value + 1;
+    const nextPeriod = monthYearToString(nextMonth, nextYear);
+    selectedPeriod.value = nextPeriod;
   } else {
-    selectedMonth.value += 1;
+    const nextMonth = selectedMonth.value + 1;
+    const nextPeriod = monthYearToString(nextMonth, selectedYear.value);
+    selectedPeriod.value = nextPeriod;
   }
   generateCalendar();
+  loadPeriodData();
 }
 
-function toggleRegisterPeriod() {
-  if (isRegistered.value) {
-    if (isCurrent.value) {
-      alert("You cannot deregister the current period.");
-      return;
-    }
-    removePeriod(selectedPeriod.value);
-  } else {
-    addPeriod(selectedPeriod.value);
+// sets selected period to current period if it exists, otherwise does nothing
+async function jumpToCurrentPeriod() {
+  const currentPeriodData = await _getCurrentPeriod();
+  if (currentPeriodData) {
+    const currentPeriod = currentPeriodData[0].period;
+    selectedPeriod.value = currentPeriod;
   }
-}
-
-function setAsCurrentPeriod() {
-  if (!isRegistered.value) addPeriod(selectedPeriod.value);
-  setCurrentPeriod(selectedPeriod.value);
-}
-
-function onDayClick(day: string) {
-  if (daySet.value) {
-    if (daySet.value.has(day)) {
-      removeCookingDay(day);
-    } else {
-      addCookingDay(day);
-    }
-  }
-}
-
-function formAddCook() {
-  const name = cookToAdd.value.trim();
-  if (!name) return;
-
-  if (!allUsers.value.includes(name)) {
-    alert(`"${name}" is not a registered user.`);
-    return;
-  }
-
-  addCook(selectedPeriod.value, name);
-  cookToAdd.value = "";
-}
-
-function jumpToCurrentPeriod() {
-  if (!currentPeriod.value) return;
-  selectedYear.value = currentYear.value;
-  selectedMonth.value = currentMonth.value;
   generateCalendar();
+  await loadPeriodData();
 }
 
-// Initialize
-generateCalendar();
+// 5 year range for year selector drop down
+const years = computed(() => {
+  const range: number[] = [];
+  for (let y = year - 2; y <= year + 2; y++) range.push(y);
+  return range;
+});
+
+// --- Lifecycle ---
+onMounted(async () => {
+  await fetchUsers();
+  generateCalendar();
+  await loadPeriodData();
+});
 </script>
 
 <template>
@@ -167,18 +261,21 @@ generateCalendar();
       </div>
 
       <div class="calendar-toggles">
-        <button class="toggle-btn" @click="toggleRegisterPeriod" :class="{ active: isRegistered }">
+        <button class="toggle-btn" @click="toggleRegisterPeriod" :class="{ active: !isRegistered }">
           {{ isRegistered ? "Deregister Period" : "Register Period" }}
         </button>
 
         <button
           class="toggle-btn"
-          @click="setAsCurrentPeriod"
-          :disabled="isCurrent"
+          @click="setSelectedAsCurrentPeriod"
+          :disabled="isCurrent || !isRegistered"
           :class="{ current: isCurrent }"
         >
           {{ isCurrent ? "Current Period" : "Set as Current" }}
         </button>
+      </div>
+      <div v-if="showBadDeregisterAttemptMsg" class="fallback-message">
+        Cannot deregister current period.
       </div>
 
       <div class="calendar-grid">
@@ -190,9 +287,10 @@ generateCalendar();
           class="calendar-cell"
           :class="{
             empty: !date,
-            selected: date && daySet.has(dateToString(date)),
+            selected: date && cookingDates.has(dateToString(date)),
+            notEditable: !isRegistered,
           }"
-          @click="date && onDayClick(dateToString(date))"
+          @click="date && isRegistered && onDayClick(dateToString(date))"
         >
           <span v-if="date">{{ date.getDate() }}</span>
         </div>
@@ -206,20 +304,24 @@ generateCalendar();
         >
           Jump to Current Period
         </button>
+
+        <div v-if="showFallbackMessage" class="fallback-message">
+          No current period set — showing this month instead.
+        </div>
       </div>
     </div>
 
     <div class="cook-panel">
       <h3>Cooks for {{ months[selectedMonth - 1] }} {{ selectedYear }}</h3>
 
-      <div v-if="cooksForPeriod.size > 0" class="cook-list">
+      <div v-if="cooks.size > 0" class="cook-list">
         <button
-          v-for="cook in cooksForPeriod"
+          v-for="cook in cooks"
           :key="cook"
           class="cook-button"
-          @click="removeCook(selectedPeriod, cook)"
+          @click="removeCookFromPeriod(cook)"
         >
-          {{ cook }}
+          {{ getKerb(cook) }}
         </button>
       </div>
       <div v-else class="no-cooks">No cooks registered for this period.</div>
@@ -227,21 +329,21 @@ generateCalendar();
       <div class="cook-actions">
         <h4>Add Cook</h4>
         <input
-          v-model.trim="cookToAdd"
+          v-model.trim="cookToAddKerb"
           list="user-list"
           placeholder="Select or type cook kerb"
           type="text"
         />
         <datalist id="user-list">
-          <option v-for="user in allUsers" :key="user" :value="user" />
+          <option v-for="userObj in allUsers" :key="userObj.user" :value="userObj.kerb" />
         </datalist>
         <button @click="formAddCook">Add</button>
       </div>
 
       <div class="preferences-toggle">
-        <button @click="toggleForm(selectedPeriod)" class="prefs-btn">
+        <button @click="toggleOpenPeriod" class="prefs-btn">
           {{
-            formOpenForSelected
+            isOpen
               ? "Close Preferences & Availabilities Forms"
               : "Open Preferences & Availabilities Forms"
           }}
@@ -296,15 +398,20 @@ generateCalendar();
 .calendar-cell:hover {
   background: rgb(174, 203, 186);
 }
+.calendar-cell.selected {
+  background: #39673a;
+  color: rgb(250, 250, 250);
+}
+
+.calendar-cell.notEditable {
+  background-color: #eee;
+  color: #999;
+  cursor: not-allowed;
+}
 
 .calendar-cell.empty {
   background: #f9f9f9;
   color: #ccc;
-}
-
-.calendar-cell.selected {
-  background: #39673a;
-  color: rgb(250, 250, 250);
 }
 
 .calendar-toggles {
@@ -457,5 +564,13 @@ generateCalendar();
 
 .nav-btn:hover {
   background: #2c5e2c;
+}
+
+.fallback-message {
+  margin-top: 8px;
+  text-align: center;
+  color: #b15a00;
+  font-size: 0.9rem;
+  font-style: italic;
 }
 </style>
