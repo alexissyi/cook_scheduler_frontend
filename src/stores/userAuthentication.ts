@@ -1,106 +1,176 @@
 import { ref, computed } from "vue";
 import { defineStore } from "pinia";
+import axios from "axios";
+
+const BASE_URL = "/api/UserAuthentication";
 
 export const useUserStore = defineStore("user", () => {
-  const passwordMap: Map<string, string> = new Map();
-  const adminKerb = "admin";
-  const adminPassword = "adminPass";
-  const passwords = ref(passwordMap);
+  const currentUser = ref("");
   const currentKerb = ref("");
-  const costcoFoodStudKerb = ref("");
-  const produceFoodStudKerb = ref("");
-  const allUsers = computed(() => Array.from(passwords.value.keys()));
 
   const isLoggedIn = computed(() => currentKerb.value !== "");
 
-  const isAdmin = computed(() => currentKerb.value === adminKerb);
+  const isAdmin = ref(false);
 
-  const isFoodStud = computed(
-    () =>
-      currentKerb.value === costcoFoodStudKerb.value ||
-      currentKerb.value === produceFoodStudKerb.value
-  );
+  const isProduceFoodStud = ref(false);
+
+  const isCostcoFoodStud = ref(false);
+
+  const isFoodStud = computed(() => isProduceFoodStud.value || isCostcoFoodStud.value);
 
   const isAdminOrFoodStud = computed(() => isAdmin.value || isFoodStud.value);
 
-  const setProduce = (kerb: string) => {
-    if (!passwordMap.has(kerb)) {
-      throw new Error("Not a valid kerb");
-    } else if (kerb === adminKerb) {
-      throw new Error("admin can't be foodstud");
-    } else {
-      produceFoodStudKerb.value = kerb;
-    }
-  };
-
-  const setCostco = (kerb: string) => {
-    if (!passwordMap.has(kerb)) {
-      throw new Error("Not a valid kerb");
-    } else if (kerb === adminKerb) {
-      throw new Error("admin can't be foodstud");
-    } else {
-      costcoFoodStudKerb.value = kerb;
-    }
-  };
-
-  const uploadUser = (kerb: string, password: string) => {
-    if (passwords.value.has(kerb)) {
-      throw new Error("User already exists");
-    } else if (password === "") {
-      throw new Error("Password is empty");
-    } else if (kerb === "") {
-      throw new Error("Kerb is empty");
-    } else {
-      passwords.value.set(kerb, password);
-    }
-  };
-
-  const login = (kerb: string, password: string) => {
-    if (kerb === adminKerb && password === adminPassword) {
-      currentKerb.value = kerb;
-    } else if (passwords.value.get(kerb) === password) {
-      currentKerb.value = kerb;
-    } else {
-      throw new Error("Wrong password");
-    }
-  };
-
-  const logout = () => {
+  const clearStore = () => {
+    currentUser.value = "";
     currentKerb.value = "";
+    isAdmin.value = false;
+    isProduceFoodStud.value = false;
+    isCostcoFoodStud.value = false;
   };
 
-  const updatePassword = (newPassword: string) => {
-    if (passwords.value.get(currentKerb.value) === newPassword) {
-      throw new Error("New password same as old password");
-    } else if (newPassword === "") {
-      throw new Error("New password is empty");
-    } else if (currentKerb.value !== adminKerb) {
-      passwords.value.set(currentKerb.value, newPassword);
+  const uploadUser = async (kerb: string, password: string) => {
+    try {
+      const response = await axios.post(`${BASE_URL}/uploadUser`, {
+        kerb: kerb,
+        password: password,
+      });
+      console.log("Response data:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
     }
   };
 
-  const removeUser = (kerb: string) => {
-    if (currentKerb.value !== adminKerb) {
-      passwords.value.delete(kerb);
+  const removeUser = async (user: string) => {
+    try {
+      const response = await axios.post(`${BASE_URL}/removeUser`, {
+        user: user,
+      });
+      console.log("Response data:", response.data);
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
+  const updateKerb = async (user: string, newKerb: string) => {
+    try {
+      const response = await axios.post(`${BASE_URL}/updateKerb`, {
+        user: user,
+        newKerb: newKerb,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
+  const updatePassword = async (user: string, newPassword: string) => {
+    try {
+      const response = await axios.post(`${BASE_URL}/updatePassword`, {
+        user: user,
+        newKerb: newPassword,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
+  const login = async (kerb: string, password: string) => {
+    try {
+      const response = await axios.post(`${BASE_URL}/login`, {
+        kerb: kerb,
+        password: password,
+      });
+
+      currentKerb.value = kerb;
+      currentUser.value = response.data.user;
+      isAdmin.value = response.data.isAdmin;
+      isProduceFoodStud.value = response.data.isProduceFoodStud;
+      isCostcoFoodStud.value = response.data.isCostcoFoodStud;
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      const response = await axios.post(`${BASE_URL}/logout`, {
+        user: currentUser.value,
+      });
+
+      clearStore();
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
+  const setProduceFoodStud = async (user: string) => {
+    try {
+      const response = await axios.post(`${BASE_URL}/setProduceFoodStud`, {
+        user: user,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
+  const setCostcoFoodStud = async (user: string) => {
+    try {
+      const response = await axios.post(`${BASE_URL}/setCostcoFoodStud`, {
+        user: user,
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
+  const _getUsers = async () => {
+    try {
+      const response = await axios.post(`${BASE_URL}/_getUsers`, {});
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
+  const _getProduceFoodStudKerb = async () => {
+    try {
+      const response = await axios.post(`${BASE_URL}/_getProduceFoodStudKerb`, {});
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+  const _getCostcoFoodStudKerb = async () => {
+    try {
+      const response = await axios.post(`${BASE_URL}/_getCostcoFoodStudKerb`, {});
+      return response.data;
+    } catch (error) {
+      console.error("Error fetching data:", error);
     }
   };
 
   return {
-    passwords,
     currentKerb,
     isLoggedIn,
     isAdmin,
     isFoodStud,
     isAdminOrFoodStud,
-    produceFoodStudKerb,
-    costcoFoodStudKerb,
-    allUsers,
-    setCostco,
-    setProduce,
+    _getProduceFoodStudKerb,
+    _getCostcoFoodStudKerb,
+    setCostcoFoodStud,
+    setProduceFoodStud,
     uploadUser,
     login,
     logout,
     updatePassword,
     removeUser,
+    _getUsers,
   };
 });

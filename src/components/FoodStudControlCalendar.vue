@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useSchedulerStore } from "@/stores/cookScheduler";
 import { useUserStore } from "@/stores/userAuthentication";
-
 import { months, dayNames, dateToString } from "@/utils";
 
 const schedulerStore = useSchedulerStore();
 const userStore = useUserStore();
-const { allUsers } = storeToRefs(userStore);
 
+// Extract scheduler actions
 const {
   addCookingDay,
   removeCookingDay,
@@ -21,77 +20,58 @@ const {
   toggleForm,
 } = schedulerStore;
 
+// Scheduler state refs
 const { currentMonth, currentYear, cookingDays, periods, currentPeriod, cooks, formsOpen } =
   storeToRefs(schedulerStore);
 
-type CalendarDay = Date | null; // either a date or an empty placeholder
+// Local state for user list (fetched from backend)
+const allUsers = ref<string[]>([]);
 
-const onDayClick = (day: string) => {
-  console.log("Clicked day:", day);
-  if (daySet.value !== undefined) {
-    console.log("in here");
-    if (daySet.value.has(day)) {
-      console.log("removing day");
-      removeCookingDay(day);
-    } else {
-      console.log("adding day");
-      addCookingDay(day);
+// Load all registered users (backend returns [{ user: "id" }])
+const fetchUsers = async () => {
+  try {
+    const res = await userStore._getUsers();
+    if (Array.isArray(res)) {
+      allUsers.value = res.map((u) => u.user);
     }
+  } catch (err) {
+    console.error("Failed to load users:", err);
   }
 };
 
+onMounted(fetchUsers);
+
+// Calendar logic
+type CalendarDay = Date | null;
+
 const selectedYear = ref(currentYear.value);
-const selectedMonth = ref(currentMonth.value); // 1 indexed
+const selectedMonth = ref(currentMonth.value); // 1-indexed
 const selectedPeriod = computed(() => {
   const month = String(selectedMonth.value).padStart(2, "0");
   return `${selectedYear.value}-${month}`;
 });
 
-const daySet = computed(() => {
-  const map = cookingDays.value;
-  return map.get(selectedPeriod.value) ?? new Set();
-});
-
+const daySet = computed(() => cookingDays.value.get(selectedPeriod.value) ?? new Set<string>());
 const isRegistered = computed(() => periods.value.has(selectedPeriod.value));
 const isCurrent = computed(() => currentPeriod.value === selectedPeriod.value);
 
-const cooksForPeriod = computed(() => cooks.value.get(selectedPeriod.value) ?? new Set([]));
+const cooksForPeriod = computed(() => cooks.value.get(selectedPeriod.value) ?? new Set<string>());
 const cookToAdd = ref("");
 
-const formOpenForSelected = computed(() => {
-  return formsOpen.value.get(selectedPeriod.value) ?? false;
-});
+const formOpenForSelected = computed(() => formsOpen.value.get(selectedPeriod.value) ?? false);
+const calendarDays = ref<CalendarDay[]>([]);
 
-const calendarDays = ref(new Array<CalendarDay>());
-
-// generate a list of years for dropdown (5 before and 4 after current)
 const years: number[] = Array.from({ length: 10 }, (_, i) => currentYear.value - 5 + i);
 
 function generateCalendar(): void {
   const firstDay = new Date(selectedYear.value, selectedMonth.value - 1, 1);
   const lastDay = new Date(selectedYear.value, selectedMonth.value, 0);
-
-  const daysInMonth = lastDay.getDate();
-  const startWeekday = firstDay.getDay();
-  console.log(firstDay);
-  console.log(startWeekday);
-
   const daysArray: CalendarDay[] = [];
 
-  // fill empty cells before first day
-  for (let i = 0; i < startWeekday; i++) {
-    daysArray.push(null);
-  }
-
-  // fill actual date cells
-  for (let day = 1; day <= daysInMonth; day++) {
-    daysArray.push(new Date(selectedYear.value, selectedMonth.value - 1, day));
-  }
-
-  // pad with nulls until total is multiple of 7
-  while (daysArray.length % 7 !== 0) {
-    daysArray.push(null);
-  }
+  for (let i = 0; i < firstDay.getDay(); i++) daysArray.push(null);
+  for (let d = 1; d <= lastDay.getDate(); d++)
+    daysArray.push(new Date(selectedYear.value, selectedMonth.value - 1, d));
+  while (daysArray.length % 7 !== 0) daysArray.push(null);
 
   calendarDays.value = daysArray;
 }
@@ -129,18 +109,24 @@ function toggleRegisterPeriod() {
 }
 
 function setAsCurrentPeriod() {
-  if (!isRegistered.value) {
-    addPeriod(selectedPeriod.value);
-  }
+  if (!isRegistered.value) addPeriod(selectedPeriod.value);
   setCurrentPeriod(selectedPeriod.value);
+}
+
+function onDayClick(day: string) {
+  if (daySet.value) {
+    if (daySet.value.has(day)) {
+      removeCookingDay(day);
+    } else {
+      addCookingDay(day);
+    }
+  }
 }
 
 function formAddCook() {
   const name = cookToAdd.value.trim();
-
   if (!name) return;
 
-  // Ensure only registered users can be added
   if (!allUsers.value.includes(name)) {
     alert(`"${name}" is not a registered user.`);
     return;
@@ -152,34 +138,34 @@ function formAddCook() {
 
 function jumpToCurrentPeriod() {
   if (!currentPeriod.value) return;
-
   selectedYear.value = currentYear.value;
   selectedMonth.value = currentMonth.value;
   generateCalendar();
 }
 
-// initialize calendar on mount
+// Initialize
 generateCalendar();
 </script>
 
 <template>
   <div class="calendar-wrapper">
     <div class="calendar">
-      <!-- month and year selection dropdowns-->
       <div class="calendar-header">
         <button class="nav-btn" @click="prevMonth">◀</button>
+
         <select v-model="selectedYear" @change="generateCalendar">
           <option v-for="year in years" :key="year" :value="year">{{ year }}</option>
         </select>
 
         <select v-model="selectedMonth" @change="generateCalendar">
           <option v-for="(month, index) in months" :key="month" :value="index + 1">
-            <!--1 indexing for months-->
             {{ month }}
           </option>
         </select>
+
         <button class="nav-btn" @click="nextMonth">▶</button>
       </div>
+
       <div class="calendar-toggles">
         <button class="toggle-btn" @click="toggleRegisterPeriod" :class="{ active: isRegistered }">
           {{ isRegistered ? "Deregister Period" : "Register Period" }}
@@ -195,25 +181,23 @@ generateCalendar();
         </button>
       </div>
 
-      <!-- calendar grid-->
       <div class="calendar-grid">
-        <!-- days of week header-->
         <div class="day-name" v-for="day in dayNames" :key="day">{{ day }}</div>
 
-        <!-- date cells -->
         <div
           v-for="(date, index) in calendarDays"
           :key="index"
           class="calendar-cell"
           :class="{
             empty: !date,
-            selected: date && daySet?.has(dateToString(date)),
+            selected: date && daySet.has(dateToString(date)),
           }"
           @click="date && onDayClick(dateToString(date))"
         >
           <span v-if="date">{{ date.getDate() }}</span>
         </div>
       </div>
+
       <div class="jump-btn-container">
         <button
           class="jump-btn"
@@ -224,21 +208,19 @@ generateCalendar();
         </button>
       </div>
     </div>
-    <!-- Cook Management Section -->
+
     <div class="cook-panel">
       <h3>Cooks for {{ months[selectedMonth - 1] }} {{ selectedYear }}</h3>
 
       <div v-if="cooksForPeriod.size > 0" class="cook-list">
-        <div class="cook-list">
-          <button
-            v-for="cook in cooksForPeriod"
-            :key="cook"
-            class="cook-button"
-            @click="removeCook(selectedPeriod, cook)"
-          >
-            {{ cook }}
-          </button>
-        </div>
+        <button
+          v-for="cook in cooksForPeriod"
+          :key="cook"
+          class="cook-button"
+          @click="removeCook(selectedPeriod, cook)"
+        >
+          {{ cook }}
+        </button>
       </div>
       <div v-else class="no-cooks">No cooks registered for this period.</div>
 
@@ -255,6 +237,7 @@ generateCalendar();
         </datalist>
         <button @click="formAddCook">Add</button>
       </div>
+
       <div class="preferences-toggle">
         <button @click="toggleForm(selectedPeriod)" class="prefs-btn">
           {{
