@@ -32,7 +32,7 @@ h3 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px;
+  padding: 16px;
   gap: 8px;
 }
 </style>

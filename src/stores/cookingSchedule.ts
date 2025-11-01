@@ -1,407 +1,98 @@
 import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 import axios from "axios";
-
 import { monthYearToString, stringToMonthYear } from "@/utils";
 
 const BASE_URL = "/api/CookingSchedule";
 
 export const useSchedulerStore = defineStore("scheduler", () => {
-  // periods represented in YYYY-MM format strings
-  // dates represented in YYYY-MM-DD format strings
-
   const currentPeriod = ref("");
 
   const currentYear = computed(() =>
-    currentPeriod.value !== "" ? stringToMonthYear(currentPeriod.value).year : null
+    currentPeriod.value ? stringToMonthYear(currentPeriod.value).year : null
   );
   const currentMonth = computed(() =>
-    currentPeriod.value !== "" ? stringToMonthYear(currentPeriod.value).month : null
-  ); // 1-indexing of months
+    currentPeriod.value ? stringToMonthYear(currentPeriod.value).month : null
+  );
 
-  const addCook = async (period: string, user: string) => {
+  /** Generic POST helper with logging and error handling */
+  const postRequest = async (endpoint: string, payload: Record<string, any> = {}) => {
     try {
-      const response = await axios.post(`${BASE_URL}/addCook`, {
-        period: period,
-        user: user,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
+      console.log(`POST ${endpoint}:`, payload);
+      const { data } = await axios.post(`${BASE_URL}/${endpoint}`, payload);
+      console.log("Response data:", data);
+      return data;
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error(`Error calling ${endpoint}:`, error);
+      return { error };
     }
   };
 
-  const removeCook = async (period: string, user: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/removeCook`, {
-        period: period,
-        user: user,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
+  // Define all API methods cleanly using the helper
+  const api = {
+    addCook: (period: string, user: string) => postRequest("addCook", { period, user }),
+    removeCook: (period: string, user: string) => postRequest("removeCook", { period, user }),
 
-  const openPeriod = async (period: string) => {
-    try {
-      console.log(`Opening period: ${period}`);
-      const response = await axios.post(`${BASE_URL}/openPeriod`, {
-        period: period,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
+    openPeriod: (period: string) => postRequest("openPeriod", { period }),
+    closePeriod: (period: string) => postRequest("closePeriod", { period }),
+    addPeriod: (period: string) => postRequest("addPeriod", { period, current: false }),
+    removePeriod: (period: string) => postRequest("removePeriod", { period }),
+    setCurrentPeriod: (period: string) => postRequest("setCurrentPeriod", { period }),
 
-  const closePeriod = async (period: string) => {
-    try {
-      console.log(`Closing period: ${period}`);
-      const response = await axios.post(`${BASE_URL}/closePeriod`, {
-        period: period,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
+    addCookingDate: (date: string) => postRequest("addCookingDate", { date }),
+    removeCookingDate: (date: string) => postRequest("removeCookingDate", { date }),
 
-  const addPeriod = async (period: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/addPeriod`, {
-        period: period,
-        current: false,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
+    uploadPreference: (
+      user: string,
+      period: string,
+      canSolo: boolean,
+      canLead: boolean,
+      canAssist: boolean,
+      maxCookingDays: number
+    ) =>
+      postRequest("uploadPreference", {
+        user,
+        period,
+        canSolo,
+        canLead,
+        canAssist,
+        maxCookingDays,
+      }),
 
-  const removePeriod = async (period: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/removePeriod`, {
-        period: period,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
+    addAvailability: (user: string, date: string) => postRequest("addAvailability", { user, date }),
+    removeAvailability: (user: string, date: string) =>
+      postRequest("removeAvailability", { user, date }),
 
-  const setCurrentPeriod = async (period: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/setCurrentPeriod`, {
-        period: period,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
+    assignLead: (user: string, date: string) => postRequest("assignLead", { user, date }),
+    assignAssistant: (user: string, date: string) => postRequest("assignAssistant", { user, date }),
+    removeAssignment: (date: string) => postRequest("removeAssignment", { date }),
 
-  const addCookingDate = async (date: string) => {
-    try {
-      console.log(`Adding cooking date ${date}`);
-      const response = await axios.post(`${BASE_URL}/addCookingDate`, {
-        date: date,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
+    generateAssignments: () => postRequest("generateAssignments"),
+    generateAssignmentsWithLLM: () => postRequest("generateAssignmentsWithLLM"),
+    clearAssignments: (period: string)=> postRequest("clearAssignments", {period}),
 
-  const removeCookingDate = async (date: string) => {
-    try {
-      console.log(`Removing cooking date ${date}`);
-      const response = await axios.post(`${BASE_URL}/removeCookingDate`, {
-        date: date,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
+    _isRegisteredPeriod: (period: string) => postRequest("_isRegisteredPeriod", { period }),
+    _isRegisteredCook: (user: string, period: string) =>
+      postRequest("_isRegisteredCook", { user, period }),
+    _isCurrentPeriod: (period: string) => postRequest("_isCurrentPeriod", { period }),
+    _isOpen: (period: string) => postRequest("_isOpen", { period }),
 
-  const uploadPreference = async (
-    user: string,
-    period: string,
-    canSolo: boolean,
-    canLead: boolean,
-    canAssist: boolean,
-    maxCookingDays: number
-  ) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/uploadPreference`, {
-        user: user,
-        period: period,
-        canSolo: canSolo,
-        canLead: canLead,
-        canAssist: canAssist,
-        maxCookingDays: maxCookingDays,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const addAvailability = async (user: string, date: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/addAvailability`, {
-        user: user,
-        date: date,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const removeAvailability = async (user: string, date: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/removeAvailability`, {
-        user: user,
-        date: date,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const assignLead = async (user: string, date: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/assignLead`, {
-        user: user,
-        date: date,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const assignAssistant = async (user: string, date: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/assignAssistant`, {
-        user: user,
-        date: date,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const removeAssignment = async (date: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/removeAssignment`, {
-        date: date,
-      }); // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const generateAssignments = async () => {
-    try {
-      const response = await axios.post(`${BASE_URL}/generateAssignments`, {});
-      // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const generateAssignmentsWithLLM = async () => {
-    try {
-      const response = await axios.post(`${BASE_URL}/generateAssignmentsWithLLM`, {});
-      // response.data is of form {} or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const _isRegisteredPeriod = async (period: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/_isRegisteredPeriod`, {
-        period: period,
-      }); // response.data is of form [{isRegisteredPeriod: boolean}] or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const _isRegisteredCook = async (user: string, period: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/_isRegisteredCook`, {
-        period: period,
-        user: user,
-      }); // response.data is of form [{isRegisteredCook: boolean}] or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const _isCurrentPeriod = async (period: string) => {
-    try {
-      console.log(`Checking if ${period} is current`);
-      const response = await axios.post(`${BASE_URL}/_isCurrentPeriod`, {
-        period: period,
-      }); // response.data is of form [{isCurrentPeriod: boolean}] or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const _isOpen = async (period: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/_isOpen`, {
-        period: period,
-      }); // response.data is of form [{isOpen: boolean}] or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const _getCooks = async (period: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/_getCooks`, {
-        period: period,
-      }); // response.data is of form Array<{cook: string}> or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const _getCookingDates = async (period: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/_getCookingDates`, {
-        period: period,
-      }); // response.data is of form Array<{cookingDate: string}> or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const _getCurrentPeriod = async () => {
-    try {
-      const response = await axios.post(`${BASE_URL}/_getCurrentPeriod`, {});
-      console.log("Response data:", response.data);
-      return response.data; // response.data is of form [{period: string}] or {error: string}
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const _getAssignment = async (date: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/_getAssignment`, {
-        date: date,
-      });
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const _getAssignments = async (period: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/_getAssignments`, {
-        period: period,
-      });
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const _getAvailability = async (user: string, period: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/_getAvailability`, {
-        user: user,
-        period: period,
-      }); // response.data is of form Array<{date: string}> or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
-  };
-
-  const _getPreference = async (user: string, period: string) => {
-    try {
-      const response = await axios.post(`${BASE_URL}/_getPreference`, {
-        user: user,
-        period: period,
-      }); // response.data is of form Array<{canLead: boolean, canSolo: boolean, canAssist: boolean, maxCookingDays: number} > or {error: string}
-      console.log("Response data:", response.data);
-      return response.data;
-    } catch (error) {
-      console.error("Error fetching data:", error);
-    }
+    _getCooks: (period: string) => postRequest("_getCooks", { period }),
+    _getCookingDates: (period: string) => postRequest("_getCookingDates", { period }),
+    _getCurrentPeriod: () => postRequest("_getCurrentPeriod"),
+    _getAssignment: (date: string) => postRequest("_getAssignment", { date }),
+    _getAssignments: (period: string) => postRequest("_getAssignments", { period }),
+    _getAvailability: (user: string, period: string) =>
+      postRequest("_getAvailability", { user, period }),
+    _getPreference: (user: string, period: string) =>
+      postRequest("_getPreference", { user, period }),
+    _getCandidateCooks: (date: string) => postRequest("_getCandidateCooks", { date }),
   };
 
   return {
     currentPeriod,
     currentYear,
     currentMonth,
-    openPeriod,
-    closePeriod,
-    addCookingDate,
-    removeCookingDate,
-    addPeriod,
-    removePeriod,
-    setCurrentPeriod,
-    addCook,
-    removeCook,
-    addAvailability,
-    removeAvailability,
-    uploadPreference,
-    _isRegisteredCook,
-    _isRegisteredPeriod,
-    _isOpen,
-    _getCooks,
-    _getCookingDates,
-    _getCurrentPeriod,
-    _getAvailability,
-    _getPreference,
-    _isCurrentPeriod,
+    ...api,
   };
 });

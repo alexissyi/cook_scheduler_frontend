@@ -56,6 +56,10 @@ export const getPeriod = (dateString: string): string => {
   return dateString.slice(0, 7);
 };
 
+export const getDay = (dateString: string): number => {
+  return Number(dateString.slice(8, 10));
+};
+
 export const stringToMonth = (dateString: string): number => {
   return Number(dateString.slice(5, 7));
 };
