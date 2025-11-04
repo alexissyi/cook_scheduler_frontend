@@ -36,6 +36,7 @@ const {
 } = schedulerStore;
 
 const { currentPeriod, currentMonth, currentYear } = storeToRefs(schedulerStore);
+const { currentSession } = storeToRefs(userStore);
 
 // non-period-specific state
 const allUsers = ref<Array<{ user: string; kerb: string }>>([]); // users to select cooks from
@@ -107,9 +108,9 @@ async function loadPeriodData() {
 async function toggleOpenPeriod() {
   console.log(`Toggling forms for ${selectedPeriod.value}`);
   if (isOpen.value) {
-    await closePeriod(selectedPeriod.value);
+    await closePeriod(currentSession.value, selectedPeriod.value);
   } else {
-    await openPeriod(selectedPeriod.value);
+    await openPeriod(currentSession.value, selectedPeriod.value);
   }
   await loadPeriodData();
 }
@@ -123,10 +124,10 @@ async function toggleRegisterPeriod() {
       return;
     }
     console.log("Removing period");
-    await removePeriod(selectedPeriod.value);
+    await removePeriod(currentSession.value, selectedPeriod.value);
   } else {
     console.log("Adding period");
-    await addPeriod(selectedPeriod.value);
+    await addPeriod(currentSession.value, selectedPeriod.value);
   }
   await loadPeriodData();
 }
@@ -134,7 +135,7 @@ async function toggleRegisterPeriod() {
 // set selected period as current period
 async function setSelectedAsCurrentPeriod() {
   console.log(`Setting ${selectedPeriod.value} as current period`);
-  await setCurrentPeriod(selectedPeriod.value);
+  await setCurrentPeriod(currentSession.value, selectedPeriod.value);
   await loadPeriodData();
 }
 
@@ -155,10 +156,10 @@ function generateCalendar() {
 async function onDayClick(date: string) {
   if (cookingDates.value.has(date)) {
     console.log(`Removing cooking date ${date}`);
-    await removeCookingDate(date);
+    await removeCookingDate(currentSession.value, date);
   } else {
     console.log(`Adding cooking date ${date}`);
-    await addCookingDate(date);
+    await addCookingDate(currentSession.value, date);
   }
   await loadPeriodData();
 }
@@ -173,14 +174,14 @@ async function formAddCook() {
   }
   const user = userObj.user;
   console.log("Registering cook: ", kerb);
-  await addCook(selectedPeriod.value, user);
+  await addCook(currentSession.value, selectedPeriod.value, user);
   cooks.value.add(user);
   cookToAddKerb.value = "";
   await loadPeriodData();
 }
 
 async function removeCookFromPeriod(user: string) {
-  await removeCook(selectedPeriod.value, user);
+  await removeCook(currentSession.value, selectedPeriod.value, user);
   cooks.value.delete(user);
   await loadPeriodData();
 }

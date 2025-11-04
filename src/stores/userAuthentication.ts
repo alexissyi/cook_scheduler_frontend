@@ -165,6 +165,7 @@ export const useUserStore = defineStore("user", () => {
   };
 
   return {
+    currentSession,
     currentUser,
     currentKerb,
     isLoggedIn,

@@ -4,6 +4,7 @@ import axios from "axios";
 import { monthYearToString, stringToMonthYear } from "@/utils";
 
 const BASE_URL = "/api/CookingSchedule";
+const SYNC_URL = "/api";
 
 export const useSchedulerStore = defineStore("scheduler", () => {
   const currentPeriod = ref("");
@@ -16,10 +17,14 @@ export const useSchedulerStore = defineStore("scheduler", () => {
   );
 
   /** Generic POST helper with logging and error handling */
-  const postRequest = async (endpoint: string, payload: Record<string, any> = {}) => {
+  const postRequest = async (
+    endpoint: string,
+    payload: Record<string, any> = {},
+    base_url: string = BASE_URL
+  ) => {
     try {
       console.log(`POST ${endpoint}:`, payload);
-      const { data } = await axios.post(`${BASE_URL}/${endpoint}`, payload);
+      const { data } = await axios.post(`${base_url}/${endpoint}`, payload);
       console.log("Response data:", data);
       return data;
     } catch (error) {
@@ -30,17 +35,26 @@ export const useSchedulerStore = defineStore("scheduler", () => {
 
   // Define all API methods cleanly using the helper
   const api = {
-    addCook: (period: string, user: string) => postRequest("addCook", { period, user }),
-    removeCook: (period: string, user: string) => postRequest("removeCook", { period, user }),
+    addCook: (session: string, period: string, user: string) =>
+      postRequest("addCook", { session, period, user }, SYNC_URL),
+    removeCook: (session: string, period: string, user: string) =>
+      postRequest("removeCook", { session, period, user }, SYNC_URL),
 
-    openPeriod: (period: string) => postRequest("openPeriod", { period }),
-    closePeriod: (period: string) => postRequest("closePeriod", { period }),
-    addPeriod: (period: string) => postRequest("addPeriod", { period, current: false }),
-    removePeriod: (period: string) => postRequest("removePeriod", { period }),
-    setCurrentPeriod: (period: string) => postRequest("setCurrentPeriod", { period }),
+    openPeriod: (session: string, period: string) =>
+      postRequest("openPeriod", { session, period }, SYNC_URL),
+    closePeriod: (session: string, period: string) =>
+      postRequest("closePeriod", { session, period }, SYNC_URL),
+    addPeriod: (session: string, period: string) =>
+      postRequest("addPeriod", { session, period, current: false }, SYNC_URL),
+    removePeriod: (session: string, period: string) =>
+      postRequest("removePeriod", { session, period }, SYNC_URL),
+    setCurrentPeriod: (session: string, period: string) =>
+      postRequest("setCurrentPeriod", { session, period }, SYNC_URL),
 
-    addCookingDate: (date: string) => postRequest("addCookingDate", { date }),
-    removeCookingDate: (date: string) => postRequest("removeCookingDate", { date }),
+    addCookingDate: (session: string, date: string) =>
+      postRequest("addCookingDate", { session, date }, SYNC_URL),
+    removeCookingDate: (session: string, date: string) =>
+      postRequest("removeCookingDate", { session, date }, SYNC_URL),
 
     uploadPreference: (
       user: string,
@@ -63,13 +77,19 @@ export const useSchedulerStore = defineStore("scheduler", () => {
     removeAvailability: (user: string, date: string) =>
       postRequest("removeAvailability", { user, date }),
 
-    assignLead: (user: string, date: string) => postRequest("assignLead", { user, date }),
-    assignAssistant: (user: string, date: string) => postRequest("assignAssistant", { user, date }),
-    removeAssignment: (date: string) => postRequest("removeAssignment", { date }),
+    assignLead: (session: string, user: string, date: string) =>
+      postRequest("assignLead", { session, user, date }, SYNC_URL),
+    assignAssistant: (session: string, user: string, date: string) =>
+      postRequest("assignAssistant", { session, user, date }, SYNC_URL),
+    removeAssignment: (session: string, date: string) =>
+      postRequest("removeAssignment", { session, date }, SYNC_URL),
 
-    generateAssignments: () => postRequest("generateAssignments"),
-    generateAssignmentsWithLLM: () => postRequest("generateAssignmentsWithLLM"),
-    clearAssignments: (period: string)=> postRequest("clearAssignments", {period}),
+    generateAssignments: (session: string) =>
+      postRequest("generateAssignments", { session }, SYNC_URL),
+    generateAssignmentsWithLLM: (session: string) =>
+      postRequest("generateAssignmentsWithLLM", { session }, SYNC_URL),
+    clearAssignments: (session: string, period: string) =>
+      postRequest("clearAssignments", { session, period }, SYNC_URL),
 
     _isRegisteredPeriod: (period: string) => postRequest("_isRegisteredPeriod", { period }),
     _isRegisteredCook: (user: string, period: string) =>

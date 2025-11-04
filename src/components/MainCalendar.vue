@@ -17,7 +17,7 @@ import { useUserStore } from "@/stores/userAuthentication";
 const schedulerStore = useSchedulerStore();
 const userStore = useUserStore();
 
-const { isFoodStud } = storeToRefs(userStore);
+const { isFoodStud, currentSession } = storeToRefs(userStore);
 // non-period-specific state
 const allUsers = ref<Array<{ user: string; kerb: string }>>([]); // users to select cooks from
 const getKerb = (user: string) => {
@@ -268,7 +268,7 @@ async function loadAvailableCooksForDate(date: string) {
 
 async function assignLead(user: string) {
   if (selectedDate.value) {
-    await schedulerStore.assignLead(user, selectedDate.value);
+    await schedulerStore.assignLead(currentSession.value, user, selectedDate.value);
     await loadPeriodData();
     await loadAvailableCooksForDate(selectedDate.value);
   }
@@ -282,7 +282,7 @@ async function assignAssistant(user: string) {
     return;
   }
   if (selectedDate.value) {
-    await schedulerStore.assignAssistant(user, selectedDate.value);
+    await schedulerStore.assignAssistant(currentSession.value, user, selectedDate.value);
     await loadPeriodData();
     await loadAvailableCooksForDate(selectedDate.value);
   }
@@ -290,7 +290,7 @@ async function assignAssistant(user: string) {
 
 async function clearAssignment() {
   if (selectedDate.value && leadKerb.value) {
-    await schedulerStore.removeAssignment(selectedDate.value);
+    await schedulerStore.removeAssignment(currentSession.value, selectedDate.value);
     await loadPeriodData();
     await loadAvailableCooksForDate(selectedDate.value);
   }
@@ -301,7 +301,7 @@ async function generateAssignments() {
     return;
   }
   console.log(`Generating assignments algorithmically for ${selectedPeriod.value}`);
-  await schedulerStore.generateAssignments();
+  await schedulerStore.generateAssignments(currentSession.value);
   await loadPeriodData();
   if (selectedDate.value) {
     await loadAvailableCooksForDate(selectedDate.value);
@@ -314,7 +314,7 @@ async function generateAssignmentsWithLLM() {
     return;
   }
   console.log(`Generating assignments via llm for ${selectedPeriod.value}`);
-  const result = await schedulerStore.generateAssignmentsWithLLM();
+  const result = await schedulerStore.generateAssignmentsWithLLM(currentSession.value);
   if (result.error) {
     llmFailed.value = true;
     return;
@@ -326,7 +326,7 @@ async function generateAssignmentsWithLLM() {
 }
 
 async function clearAllAssignments() {
-  await schedulerStore.clearAssignments(selectedPeriod.value);
+  await schedulerStore.clearAssignments(currentSession.value, selectedPeriod.value);
   await loadPeriodData();
   if (selectedDate.value) {
     await loadAvailableCooksForDate(selectedDate.value);
