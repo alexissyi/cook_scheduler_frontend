@@ -3,12 +3,14 @@ import { defineStore } from "pinia";
 import axios from "axios";
 
 const BASE_URL = "/api/UserAuthentication";
+const SYNC_URL = "/api";
 
 export const useUserStore = defineStore("user", () => {
   const currentUser = ref("");
   const currentKerb = ref("");
+  const currentSession = ref("");
 
-  const isLoggedIn = computed(() => currentKerb.value !== "");
+  const isLoggedIn = computed(() => currentKerb.value !== "" && currentSession.value !== "");
 
   const isAdmin = ref(false);
 
@@ -79,11 +81,11 @@ export const useUserStore = defineStore("user", () => {
 
   const login = async (kerb: string, password: string) => {
     try {
-      const response = await axios.post(`${BASE_URL}/login`, {
+      const response = await axios.post(`${SYNC_URL}/login`, {
         kerb: kerb,
         password: password,
       });
-
+      currentSession.value = response.data.session;
       currentKerb.value = kerb;
       currentUser.value = response.data.user;
       isAdmin.value = response.data.isAdmin;
@@ -97,8 +99,8 @@ export const useUserStore = defineStore("user", () => {
 
   const logout = async () => {
     try {
-      const response = await axios.post(`${BASE_URL}/logout`, {
-        user: currentUser.value,
+      const response = await axios.post(`${SYNC_URL}/logout`, {
+        session: currentSession.value,
       });
 
       clearStore();
