@@ -66,6 +66,7 @@ function generateCalendar(): void {
 
 async function loadPeriodData() {
   if (!selectedPeriod.value) return;
+  console.log(`Attempting to load period data for ${currentUser.value}`);
   const period = selectedPeriod.value;
   const user = currentUser.value;
 

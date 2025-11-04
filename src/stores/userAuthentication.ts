@@ -45,7 +45,8 @@ export const useUserStore = defineStore("user", () => {
 
   const removeUser = async (user: string) => {
     try {
-      const response = await axios.post(`${BASE_URL}/removeUser`, {
+      const response = await axios.post(`${SYNC_URL}/removeUser`, {
+        session: currentSession.value,
         user: user,
       });
       console.log("Response data:", response.data);
@@ -57,7 +58,8 @@ export const useUserStore = defineStore("user", () => {
 
   const updateKerb = async (user: string, newKerb: string) => {
     try {
-      const response = await axios.post(`${BASE_URL}/updateKerb`, {
+      const response = await axios.post(`${SYNC_URL}/updateKerb`, {
+        session: currentSession.value,
         user: user,
         newKerb: newKerb,
       });
@@ -69,7 +71,8 @@ export const useUserStore = defineStore("user", () => {
 
   const updatePassword = async (user: string, newPassword: string) => {
     try {
-      const response = await axios.post(`${BASE_URL}/updatePassword`, {
+      const response = await axios.post(`${SYNC_URL}/updatePassword`, {
+        session: currentSession.value,
         user: user,
         newKerb: newPassword,
       });
@@ -85,6 +88,7 @@ export const useUserStore = defineStore("user", () => {
         kerb: kerb,
         password: password,
       });
+      console.log(`Retrieved user data for: ${response.data.user}`);
       currentSession.value = response.data.session;
       currentKerb.value = kerb;
       currentUser.value = response.data.user;
@@ -112,7 +116,8 @@ export const useUserStore = defineStore("user", () => {
 
   const setProduceFoodStud = async (user: string) => {
     try {
-      const response = await axios.post(`${BASE_URL}/setProduceFoodStud`, {
+      const response = await axios.post(`${SYNC_URL}/setProduceFoodStud`, {
+        session: currentSession.value,
         user: user,
       });
       return response.data;
@@ -123,7 +128,8 @@ export const useUserStore = defineStore("user", () => {
 
   const setCostcoFoodStud = async (user: string) => {
     try {
-      const response = await axios.post(`${BASE_URL}/setCostcoFoodStud`, {
+      const response = await axios.post(`${SYNC_URL}/setCostcoFoodStud`, {
+        session: currentSession.value,
         user: user,
       });
       return response.data;
