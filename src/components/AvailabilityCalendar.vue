@@ -16,7 +16,7 @@ import {
 
 const schedulerStore = useSchedulerStore();
 const userStore = useUserStore();
-const { currentUser } = storeToRefs(userStore);
+const { currentUser, currentSession } = storeToRefs(userStore);
 
 // selected period and period-relevant states
 const today = new Date();
@@ -125,11 +125,11 @@ async function onDayClick(date: string) {
   const user = currentUser.value;
   if (availability.value.has(date)) {
     console.log(`Removing availability ${date}`);
-    await schedulerStore.removeAvailability(user, date);
+    await schedulerStore.removeAvailability(currentSession.value, user, date);
     availability.value.delete(date);
   } else {
     console.log(`Adding availability ${date}`);
-    await schedulerStore.addAvailability(user, date);
+    await schedulerStore.addAvailability(currentSession.value, user, date);
     availability.value.add(date);
   }
 }
@@ -140,6 +140,7 @@ async function savePreferences() {
     return;
   }
   await schedulerStore.uploadPreference(
+    currentSession.value,
     currentUser.value,
     selectedPeriod.value,
     preferences.value.canSolo,

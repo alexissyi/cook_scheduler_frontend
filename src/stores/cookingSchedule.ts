@@ -57,6 +57,7 @@ export const useSchedulerStore = defineStore("scheduler", () => {
       postRequest("removeCookingDate", { session, date }, SYNC_URL),
 
     uploadPreference: (
+      session: string,
       user: string,
       period: string,
       canSolo: boolean,
@@ -64,18 +65,24 @@ export const useSchedulerStore = defineStore("scheduler", () => {
       canAssist: boolean,
       maxCookingDays: number
     ) =>
-      postRequest("uploadPreference", {
-        user,
-        period,
-        canSolo,
-        canLead,
-        canAssist,
-        maxCookingDays,
-      }),
+      postRequest(
+        "uploadPreference",
+        {
+          session,
+          user,
+          period,
+          canSolo,
+          canLead,
+          canAssist,
+          maxCookingDays,
+        },
+        SYNC_URL
+      ),
 
-    addAvailability: (user: string, date: string) => postRequest("addAvailability", { user, date }),
-    removeAvailability: (user: string, date: string) =>
-      postRequest("removeAvailability", { user, date }),
+    addAvailability: (session: string, user: string, date: string) =>
+      postRequest("addAvailability", { session, user, date }, SYNC_URL),
+    removeAvailability: (session: string, user: string, date: string) =>
+      postRequest("removeAvailability", { session, user, date }, SYNC_URL),
 
     assignLead: (session: string, user: string, date: string) =>
       postRequest("assignLead", { session, user, date }, SYNC_URL),
