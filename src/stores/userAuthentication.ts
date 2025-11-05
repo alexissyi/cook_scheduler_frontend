@@ -1,9 +1,10 @@
 import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 import axios from "axios";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
-const BASE_URL = "/api/UserAuthentication";
-const SYNC_URL = "/api";
+const BASE_URL = `${API_BASE}/UserAuthentication`;
+const SYNC_URL = API_BASE;
 
 export const useUserStore = defineStore("user", () => {
   const currentUser = ref("");

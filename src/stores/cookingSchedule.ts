@@ -3,8 +3,9 @@ import { defineStore } from "pinia";
 import axios from "axios";
 import { monthYearToString, stringToMonthYear } from "@/utils";
 
-const BASE_URL = "/api/CookingSchedule";
-const SYNC_URL = "/api";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
+const BASE_URL = `${API_BASE}/CookingSchedule`;
+const SYNC_URL = API_BASE;
 
 export const useSchedulerStore = defineStore("scheduler", () => {
   const currentPeriod = ref("");
